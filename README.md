@@ -6,7 +6,7 @@ dev-platform 的 GitHub Actions 工作流模板仓库。
 
 | 模板文件 | 说明 | 引用方式 |
 |---------|------|---------|
-| `web-deploy-template.yml` | Web 项目部署模板 | `uses: chowbus/web-deploy-test/.github/workflows/web-deploy-template.yml@main` |
+| `web-deploy-template.yml` | Web 项目部署模板 | `uses: chowbus/dev-platform-workflows/.github/workflows/web-deploy-template.yml@main` |
 
 ## 🚀 使用方法
 
@@ -30,7 +30,7 @@ on:
 
 jobs:
   deploy:
-    uses: chowbus/web-deploy-test/.github/workflows/web-deploy-template.yml@main
+    uses: chowbus/dev-platform-workflows/.github/workflows/web-deploy-template.yml@main
     with:
       environment: ${{ inputs.environment }}
       bucket_name: ${{ inputs.bucket_name }}
