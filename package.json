@@ -7,6 +7,8 @@
     "build_staging-01": "npm run build",
     "build_staging-02": "npm run build",
     "build_staging-03": "npm run build",
+    "build_staging-04": "npm run build",
+    "build_staging-06": "npm run build",
     "build_production": "npm run build"
   }
 }
