@@ -1,0 +1,12 @@
+{
+  "name": "workflow-test",
+  "version": "1.0.0",
+  "description": "Simple test for dev-platform workflow",
+  "scripts": {
+    "build": "mkdir -p build && cp -r test/* build/",
+    "build_staging-01": "npm run build",
+    "build_staging-02": "npm run build",
+    "build_staging-03": "npm run build",
+    "build_production": "npm run build"
+  }
+}
