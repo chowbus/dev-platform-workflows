@@ -1,6 +1,7 @@
 name: Deploy via dev-platform
 
-# 简单测试 workflow - 内联版本（不依赖 reusable workflow）
+# Wrapper workflow for dev-platform-workflows 自测
+# 调用本仓库的 web-deploy-template.yml 进行测试
 
 on:
   workflow_dispatch:
@@ -8,11 +9,17 @@ on:
       environment:
         description: 'Deployment environment'
         required: true
-        type: string
+        type: choice
+        options:
+          - staging-02
+          - staging-04
+          - staging-06
+        default: 'staging-02'
       bucket_name:
         description: 'S3 bucket name'
         required: true
         type: string
+        default: 'dev-platform-workflows-test'
       callback_url:
         description: 'Deployment callback URL'
         required: false
@@ -38,103 +45,26 @@ on:
         description: 'Version number'
         required: false
         type: string
+        default: '1.0.0'
 
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    # 测试阶段不需要审批
-    # environment: deploy-${{ inputs.environment }}
-
-    steps:
-      - name: 📋 Deployment Info
-        run: |
-          echo "🚀 Starting deployment..."
-          echo "Environment: ${{ inputs.environment }}"
-          echo "Bucket: ${{ inputs.bucket_name }}"
-          echo "Git Ref: ${{ inputs.git_ref }}"
-          echo "Iteration: ${{ inputs.iteration_name }} (${{ inputs.iteration_id }})"
-          echo "Version: ${{ inputs.version }}"
-
-      - name: 📥 Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.git_ref }}
-
-      - name: 🏗️ Build
-        run: |
-          echo "📦 Building project..."
-          mkdir -p build
-          cp index.html build/
-          echo "✅ Build completed"
-          ls -la build/
-
-      - name: 🔑 Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_STAGING_CI }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_STAGING_CI }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: 📤 Deploy to S3
-        run: |
-          if [ "${{ inputs.environment }}" = "production" ]; then
-            S3_PATH="s3://${{ inputs.bucket_name }}.chowbus.com/"
-          else
-            S3_PATH="s3://${{ inputs.bucket_name }}-${{ inputs.environment }}.chowbus.com/"
-          fi
-          
-          echo "📤 Deploying to: $S3_PATH"
-          aws s3 sync build/ "$S3_PATH" --delete
-          echo "✅ S3 deployment completed"
-
-      - name: 🔄 Invalidate CloudFront Cache
-        if: inputs.cloudfront_id != ''
-        run: |
-          echo "🔄 Invalidating CloudFront: ${{ inputs.cloudfront_id }}"
-          aws cloudfront create-invalidation \
-            --distribution-id "${{ inputs.cloudfront_id }}" \
-            --paths "/*"
-
-      - name: 📞 Send Callback (Success)
-        if: success() && inputs.callback_url != ''
-        run: |
-          if [ "${{ inputs.environment }}" = "production" ]; then
-            DEPLOY_URL="https://${{ inputs.bucket_name }}.chowbus.com"
-          else
-            DEPLOY_URL="https://${{ inputs.bucket_name }}-${{ inputs.environment }}.chowbus.com"
-          fi
-          
-          curl -X POST "${{ inputs.callback_url }}" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"status\": \"success\",
-              \"environment\": \"${{ inputs.environment }}\",
-              \"deploymentId\": \"${{ github.run_id }}\",
-              \"deploymentUrl\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\",
-              \"deployedUrl\": \"$DEPLOY_URL\",
-              \"iterationId\": \"${{ inputs.iteration_id }}\",
-              \"version\": \"${{ inputs.version }}\"
-            }" || echo "⚠️ Callback failed"
-
-      - name: 📞 Send Callback (Failure)
-        if: failure() && inputs.callback_url != ''
-        run: |
-          curl -X POST "${{ inputs.callback_url }}" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"status\": \"failure\",
-              \"environment\": \"${{ inputs.environment }}\",
-              \"deploymentId\": \"${{ github.run_id }}\",
-              \"deploymentUrl\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\",
-              \"iterationId\": \"${{ inputs.iteration_id }}\",
-              \"version\": \"${{ inputs.version }}\",
-              \"error\": \"Deployment failed\"
-            }" || echo "⚠️ Callback failed"
-
-      - name: 📊 Summary
-        if: always()
-        run: |
-          echo "## 📊 Deployment Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- **Environment**: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Bucket**: ${{ inputs.bucket_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+  deploy:
+    uses: chowbus/dev-platform-workflows/.github/workflows/web-deploy-template.yml@main
+    with:
+      environment: ${{ inputs.environment }}
+      bucket_name: ${{ inputs.bucket_name }}
+      callback_url: ${{ inputs.callback_url }}
+      cloudfront_id: ${{ inputs.cloudfront_id }}
+      git_ref: ${{ inputs.git_ref }}
+      iteration_id: ${{ inputs.iteration_id }}
+      iteration_name: ${{ inputs.iteration_name }}
+      version: ${{ inputs.version }}
+      node_version: '18'
+      build_command: 'build_${{ inputs.environment }}'
+      build_output_dir: 'build'
+    secrets:
+      AWS_ACCESS_KEY_ID_STAGING_CI: ${{ secrets.AWS_ACCESS_KEY_ID_STAGING_CI }}
+      AWS_SECRET_ACCESS_KEY_STAGING_CI: ${{ secrets.AWS_SECRET_ACCESS_KEY_STAGING_CI }}
+      AWS_ACCESS_KEY_ID_PRODUCTION_CI: ${{ secrets.AWS_ACCESS_KEY_ID_PRODUCTION_CI }}
+      AWS_SECRET_ACCESS_KEY_PRODUCTION_CI: ${{ secrets.AWS_SECRET_ACCESS_KEY_PRODUCTION_CI }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
