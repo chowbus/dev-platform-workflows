@@ -1,0 +1,313 @@
+name: Web Deploy Template (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Target environment (staging-01, staging-02, staging-03, production)'
+        required: true
+        type: string
+      bucket_name:
+        description: 'S3 bucket name (without environment suffix)'
+        required: true
+        type: string
+      node_version:
+        description: 'Node.js version'
+        required: false
+        type: string
+        default: "16.18"
+      callback_url:
+        description: 'Deployment callback URL'
+        required: false
+        type: string
+        default: ""
+      cloudfront_id:
+        description: 'CloudFront Distribution ID (optional)'
+        required: false
+        type: string
+        default: ""
+      git_ref:
+        description: 'Git branch/tag to checkout and deploy'
+        required: false
+        type: string
+        default: "main"
+      custom_build_cmd:
+        description: 'Custom build command to run after build (optional)'
+        required: false
+        type: string
+        default: ""
+      build_arg_rename:
+        description: 'Environment variables to inject from secrets (space-separated)'
+        required: false
+        type: string
+        default: ""
+      s3_prefix:
+        description: 'S3 path prefix (optional)'
+        required: false
+        type: string
+        default: ""
+
+env:
+  GITHUB_TOKEN: ${{ secrets.OAUTH_GITHUB_TOKEN }}
+  BUILD_ENV: ${{ inputs.environment }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: deploy-${{ inputs.environment }}
+    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_ref }}
+
+      - name: 🔧 Setup Node Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: "yarn"
+
+      - name: 📦 Install Dependencies
+        run: |
+          yarn install --frozen-lockfile
+          echo "CHECKSUM=$(shasum yarn.lock| awk '{print $1}')" >> $GITHUB_ENV
+
+      - name: 🔐 Initialize Secrets
+        env:
+          SECRETS_CONTEXT: ${{ toJson(secrets) }}
+        run: |
+          secret_list=$(jq -r 'to_entries[] | select (.key != "ENG_PRIVATE_KEY" and .key != "GITHUB_TOKEN") | ("\(.key)=\(.value)")' <<< $SECRETS_CONTEXT)
+          for s in $secret_list; do
+            echo $s >> $GITHUB_ENV
+          done
+
+      - name: 🔐 Inject Secrets to .env
+        if: inputs.build_arg_rename != ''
+        run: |
+          # Inject GitHub Secrets to .env file
+          for arg in ${{ inputs.build_arg_rename }}; do
+            target_env_var="${{ inputs.environment }}"
+            target_env_var_name="${arg}_${target_env_var/-/_}"
+            target_arg=${target_env_var_name^^}
+            echo "" >> .env.${{ inputs.environment }}
+            echo "$arg=$(printenv ${target_arg})" >> .env.${{ inputs.environment }}
+          done
+          
+          # Show injected variables (masked)
+          echo "📝 Injected environment variables:"
+          cat .env.${{ inputs.environment }} | sed 's/\(.*=\).*/\1***/' || true
+
+      - name: 🏗️ Build Application
+        run: |
+          export NODE_OPTIONS=--openssl-legacy-provider
+          npm run build_${{ inputs.environment }}
+        env:
+          CI: true
+
+      - name: 🔨 Custom Build Command
+        if: inputs.custom_build_cmd != ''
+        run: |
+          ${{ inputs.custom_build_cmd }}
+
+      - name: 📊 Verify Build Output
+        run: |
+          if [ ! -d "build" ]; then
+            echo "❌ Build output directory 'build' not found"
+            exit 1
+          fi
+          
+          echo "✅ Build output directory exists"
+          echo "📁 Build output contents:"
+          ls -lah build/ || true
+          
+          # Calculate build size
+          BUILD_SIZE=$(du -sh build | cut -f1)
+          echo "📦 Build size: $BUILD_SIZE"
+
+      - name: 🔑 Configure AWS Credentials (Staging)
+        if: inputs.environment != 'production'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_STAGING_CI }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_STAGING_CI }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: 🔑 Configure AWS Credentials (Production)
+        if: inputs.environment == 'production'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_PROD_CI }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD_CI }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: 📤 Deploy to S3
+        run: |
+          # Construct S3 path
+          if [ "${{ inputs.environment }}" = "production" ]; then
+            S3_PATH="s3://${{ inputs.bucket_name }}.chowbus.com/"
+          else
+            S3_PATH="s3://${{ inputs.bucket_name }}-${{ inputs.environment }}.chowbus.com/"
+          fi
+          
+          # Add prefix if specified
+          if [ -n "${{ inputs.s3_prefix }}" ]; then
+            S3_PATH="${S3_PATH}${{ inputs.s3_prefix }}/"
+          fi
+          
+          echo "📤 Deploying to: $S3_PATH"
+          
+          # Sync to S3
+          aws s3 sync build/ "$S3_PATH" --delete
+          
+          echo "✅ S3 deployment completed"
+
+      - name: 🔄 Invalidate CloudFront Cache
+        if: inputs.cloudfront_id != ''
+        run: |
+          CLOUDFRONT_ID="${{ inputs.cloudfront_id }}"
+          
+          # Construct invalidation path
+          if [ -n "${{ inputs.s3_prefix }}" ]; then
+            INVALIDATION_PATH="/${{ inputs.s3_prefix }}/*"
+          else
+            INVALIDATION_PATH="/*"
+          fi
+          
+          echo "🔄 Invalidating CloudFront distribution: $CLOUDFRONT_ID"
+          echo "📁 Invalidation path: $INVALIDATION_PATH"
+          
+          INVALIDATION_ID=$(aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_ID" \
+            --paths "$INVALIDATION_PATH" \
+            --query 'Invalidation.Id' \
+            --output text)
+          
+          echo "✅ CloudFront invalidation created: $INVALIDATION_ID"
+
+      - name: 🏥 Health Check
+        if: always()
+        run: |
+          # Construct health check URL
+          if [ "${{ inputs.environment }}" = "production" ]; then
+            HEALTH_URL="https://${{ inputs.bucket_name }}.chowbus.com"
+          else
+            HEALTH_URL="https://${{ inputs.bucket_name }}-${{ inputs.environment }}.chowbus.com"
+          fi
+          
+          if [ -n "${{ inputs.s3_prefix }}" ]; then
+            HEALTH_URL="${HEALTH_URL}/${{ inputs.s3_prefix }}"
+          fi
+          
+          echo "🏥 Health checking: $HEALTH_URL"
+          
+          MAX_RETRIES=10
+          RETRY_DELAY=5
+          
+          for i in $(seq 1 $MAX_RETRIES); do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || echo "000")
+            
+            if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "304" ]; then
+              echo "✅ Health check passed (HTTP $HTTP_CODE)"
+              exit 0
+            fi
+            
+            echo "⏳ Attempt $i/$MAX_RETRIES: HTTP $HTTP_CODE, retrying in ${RETRY_DELAY}s..."
+            sleep $RETRY_DELAY
+          done
+          
+          echo "⚠️  Health check did not pass after $MAX_RETRIES attempts"
+          # Don't fail the workflow, just warn
+          exit 0
+
+      - name: 📞 Send Deployment Callback (Success)
+        if: success() && inputs.callback_url != ''
+        run: |
+          CALLBACK_URL="${{ inputs.callback_url }}"
+          
+          # Construct deployment URL
+          if [ "${{ inputs.environment }}" = "production" ]; then
+            DEPLOY_URL="https://${{ inputs.bucket_name }}.chowbus.com"
+          else
+            DEPLOY_URL="https://${{ inputs.bucket_name }}-${{ inputs.environment }}.chowbus.com"
+          fi
+          
+          if [ -n "${{ inputs.s3_prefix }}" ]; then
+            DEPLOY_URL="${DEPLOY_URL}/${{ inputs.s3_prefix }}"
+          fi
+          
+          PAYLOAD=$(cat <<EOF
+          {
+            "status": "success",
+            "environment": "${{ inputs.environment }}",
+            "deploymentId": "${{ github.run_id }}",
+            "deploymentUrl": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "deployedUrl": "$DEPLOY_URL",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "commit": "${{ github.sha }}",
+            "branch": "${{ github.ref_name }}"
+          }
+          EOF
+          )
+          
+          echo "📞 Sending success callback to: $CALLBACK_URL"
+          
+          curl -X POST "$CALLBACK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            --max-time 10 \
+            --retry 3 \
+            || echo "⚠️  Callback failed, but deployment succeeded"
+
+      - name: 📞 Send Deployment Callback (Failure)
+        if: failure() && inputs.callback_url != ''
+        run: |
+          CALLBACK_URL="${{ inputs.callback_url }}"
+          
+          PAYLOAD=$(cat <<EOF
+          {
+            "status": "failure",
+            "environment": "${{ inputs.environment }}",
+            "deploymentId": "${{ github.run_id }}",
+            "deploymentUrl": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "commit": "${{ github.sha }}",
+            "branch": "${{ github.ref_name }}",
+            "error": "Deployment failed, check GitHub Actions logs for details"
+          }
+          EOF
+          )
+          
+          echo "📞 Sending failure callback to: $CALLBACK_URL"
+          
+          curl -X POST "$CALLBACK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            --max-time 10 \
+            --retry 3 \
+            || echo "⚠️  Callback failed"
+
+      - name: 📊 Deployment Summary
+        if: always()
+        run: |
+          echo "## 📊 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Bucket**: ${{ inputs.bucket_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Node Version**: ${{ inputs.node_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ inputs.environment }}" = "production" ]; then
+            DEPLOY_URL="https://${{ inputs.bucket_name }}.chowbus.com"
+          else
+            DEPLOY_URL="https://${{ inputs.bucket_name }}-${{ inputs.environment }}.chowbus.com"
+          fi
+          
+          if [ -n "${{ inputs.s3_prefix }}" ]; then
+            DEPLOY_URL="${DEPLOY_URL}/${{ inputs.s3_prefix }}"
+          fi
+          
+          echo "- **Deployed URL**: [$DEPLOY_URL]($DEPLOY_URL)" >> $GITHUB_STEP_SUMMARY
