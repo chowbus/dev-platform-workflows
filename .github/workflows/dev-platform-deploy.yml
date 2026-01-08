@@ -62,5 +62,6 @@ jobs:
       node_version: '18'
       build_command: 'build_${{ inputs.environment }}'
       build_output_dir: 'build'
+      dry_run: true  # 测试模式，跳过实际 AWS 部署
     # 继承组织/仓库级别的 secrets（AWS credentials 等）
     secrets: inherit

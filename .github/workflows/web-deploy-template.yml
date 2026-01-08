@@ -81,6 +81,11 @@ on:
         required: false
         type: string
         default: "us-east-1"
+      dry_run:
+        description: 'Dry run mode - skip actual AWS deployment (for testing)'
+        required: false
+        type: boolean
+        default: false
     secrets:
       AWS_ACCESS_KEY_ID_STAGING_CI:
         description: 'AWS Access Key ID for Staging'
@@ -234,7 +239,7 @@ jobs:
           echo "📦 Build size: $BUILD_SIZE"
 
       - name: 🔑 Configure AWS Credentials (Staging)
-        if: inputs.environment != 'production'
+        if: inputs.environment != 'production' && !inputs.dry_run
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_STAGING_CI }}
@@ -242,14 +247,42 @@ jobs:
           aws-region: ${{ inputs.aws_region || secrets.AWS_REGION || 'us-east-1' }}
 
       - name: 🔑 Configure AWS Credentials (Production)
-        if: inputs.environment == 'production'
+        if: inputs.environment == 'production' && !inputs.dry_run
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_PROD_CI }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD_CI }}
           aws-region: ${{ inputs.aws_region || secrets.AWS_REGION || 'us-east-1' }}
 
+      - name: 🧪 Dry Run - Simulate Deployment
+        if: inputs.dry_run
+        run: |
+          # Construct S3 path
+          if [ "${{ inputs.environment }}" = "production" ]; then
+            S3_PATH="s3://${{ inputs.bucket_name }}.chowbus.com/"
+          else
+            S3_PATH="s3://${{ inputs.bucket_name }}-${{ inputs.environment }}.chowbus.com/"
+          fi
+          
+          # Add prefix if specified
+          if [ -n "${{ inputs.s3_prefix }}" ]; then
+            S3_PATH="${S3_PATH}${{ inputs.s3_prefix }}/"
+          fi
+          
+          echo "🧪 DRY RUN MODE - No actual deployment"
+          echo "📍 Environment: ${{ inputs.environment }}"
+          echo "📦 Build output: ${{ inputs.build_output_dir }}/"
+          echo "🎯 Would deploy to: $S3_PATH"
+          echo "🔧 Build command: ${{ inputs.build_command }}"
+          
+          if [ -n "${{ inputs.cloudfront_id }}" ]; then
+            echo "🔄 Would invalidate CloudFront: ${{ inputs.cloudfront_id }}"
+          fi
+          
+          echo "✅ Dry run completed successfully"
+
       - name: 📤 Deploy to S3
+        if: '!inputs.dry_run'
         run: |
           # Construct S3 path
           if [ "${{ inputs.environment }}" = "production" ]; then
@@ -271,7 +304,7 @@ jobs:
           echo "✅ S3 deployment completed"
 
       - name: 🔄 Invalidate CloudFront Cache
-        if: inputs.cloudfront_id != ''
+        if: inputs.cloudfront_id != '' && !inputs.dry_run
         run: |
           CLOUDFRONT_ID="${{ inputs.cloudfront_id }}"
           
