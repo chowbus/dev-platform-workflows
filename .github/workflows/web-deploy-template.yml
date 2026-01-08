@@ -71,6 +71,11 @@ on:
         required: false
         type: string
         default: "dist"
+      package_manager:
+        description: 'Package manager to use (auto, npm, yarn, pnpm). Auto will detect from lock file.'
+        required: false
+        type: string
+        default: "auto"
     secrets:
       AWS_ACCESS_KEY_ID_STAGING_CI:
         description: 'AWS Access Key ID for Staging'
@@ -112,16 +117,52 @@ jobs:
         with:
           ref: ${{ inputs.git_ref }}
 
+      - name: � Detect Package Manager
+        id: detect-pm
+        run: |
+          # 如果传入了 package_manager 参数且不是 auto，使用传入的值
+          if [ "${{ inputs.package_manager }}" != "auto" ] && [ -n "${{ inputs.package_manager }}" ]; then
+            echo "PACKAGE_MANAGER=${{ inputs.package_manager }}" >> $GITHUB_OUTPUT
+            echo "📦 Using specified package manager: ${{ inputs.package_manager }}"
+          # 否则自动检测
+          elif [ -f "yarn.lock" ]; then
+            echo "PACKAGE_MANAGER=yarn" >> $GITHUB_OUTPUT
+            echo "📦 Detected yarn.lock, using yarn"
+          elif [ -f "package-lock.json" ]; then
+            echo "PACKAGE_MANAGER=npm" >> $GITHUB_OUTPUT
+            echo "📦 Detected package-lock.json, using npm"
+          elif [ -f "pnpm-lock.yaml" ]; then
+            echo "PACKAGE_MANAGER=pnpm" >> $GITHUB_OUTPUT
+            echo "📦 Detected pnpm-lock.yaml, using pnpm"
+          else
+            echo "PACKAGE_MANAGER=npm" >> $GITHUB_OUTPUT
+            echo "⚠️ No lock file found, defaulting to npm"
+          fi
+
       - name: 🔧 Setup Node Environment
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node_version }}
-          cache: "yarn"
+          cache: ${{ steps.detect-pm.outputs.PACKAGE_MANAGER }}
 
-      - name: 📦 Install Dependencies
+      - name: 📦 Install Dependencies (Yarn)
+        if: steps.detect-pm.outputs.PACKAGE_MANAGER == 'yarn'
         run: |
           yarn install --frozen-lockfile
           echo "CHECKSUM=$(shasum yarn.lock| awk '{print $1}')" >> $GITHUB_ENV
+
+      - name: 📦 Install Dependencies (NPM)
+        if: steps.detect-pm.outputs.PACKAGE_MANAGER == 'npm'
+        run: |
+          npm ci
+          echo "CHECKSUM=$(shasum package-lock.json 2>/dev/null | awk '{print $1}' || echo 'no-lock')" >> $GITHUB_ENV
+
+      - name: 📦 Install Dependencies (PNPM)
+        if: steps.detect-pm.outputs.PACKAGE_MANAGER == 'pnpm'
+        run: |
+          npm install -g pnpm
+          pnpm install --frozen-lockfile
+          echo "CHECKSUM=$(shasum pnpm-lock.yaml| awk '{print $1}')" >> $GITHUB_ENV
 
       - name: 🔐 Initialize Secrets
         env:
