@@ -10,5 +10,21 @@
     "build_staging-04": "npm run build",
     "build_staging-06": "npm run build",
     "build_production": "npm run build"
-  }
+  },
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chowbus/dev-platform-workflows.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/chowbus/dev-platform-workflows/issues"
+  },
+  "homepage": "https://github.com/chowbus/dev-platform-workflows#readme"
 }
