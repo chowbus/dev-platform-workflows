@@ -46,6 +46,21 @@ on:
         required: false
         type: string
         default: ""
+      iteration_id:
+        description: 'Iteration ID (for tracking)'
+        required: false
+        type: string
+        default: ""
+      iteration_name:
+        description: 'Iteration name (for tracking)'
+        required: false
+        type: string
+        default: ""
+      version:
+        description: 'Version number (for tracking)'
+        required: false
+        type: string
+        default: ""
 
 env:
   GITHUB_TOKEN: ${{ secrets.OAUTH_GITHUB_TOKEN }}
@@ -245,7 +260,10 @@ jobs:
             "deployedUrl": "$DEPLOY_URL",
             "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "commit": "${{ github.sha }}",
-            "branch": "${{ github.ref_name }}"
+            "branch": "${{ github.ref_name }}",
+            "iterationId": "${{ inputs.iteration_id }}",
+            "iterationName": "${{ inputs.iteration_name }}",
+            "version": "${{ inputs.version }}"
           }
           EOF
           )
@@ -273,7 +291,10 @@ jobs:
             "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "commit": "${{ github.sha }}",
             "branch": "${{ github.ref_name }}",
-            "error": "Deployment failed, check GitHub Actions logs for details"
+            "error": "Deployment failed, check GitHub Actions logs for details",
+            "iterationId": "${{ inputs.iteration_id }}",
+            "iterationName": "${{ inputs.iteration_name }}",
+            "version": "${{ inputs.version }}"
           }
           EOF
           )
