@@ -111,6 +111,9 @@ on:
       OAUTH_GITHUB_TOKEN:
         description: 'GitHub OAuth Token'
         required: false
+      WEBHOOK_TOKEN:
+        description: 'Webhook callback authentication token'
+        required: false
 
 env:
   GITHUB_TOKEN: ${{ secrets.OAUTH_GITHUB_TOKEN }}
@@ -398,6 +401,7 @@ jobs:
           
           curl -X POST "$CALLBACK_URL" \
             -H "Content-Type: application/json" \
+            -H "x-webhook-token: ${{ secrets.WEBHOOK_TOKEN }}" \
             -d "$PAYLOAD" \
             --max-time 10 \
             --retry 3 \
@@ -429,6 +433,7 @@ jobs:
           
           curl -X POST "$CALLBACK_URL" \
             -H "Content-Type: application/json" \
+            -H "x-webhook-token: ${{ secrets.WEBHOOK_TOKEN }}" \
             -d "$PAYLOAD" \
             --max-time 10 \
             --retry 3 \
@@ -460,6 +465,7 @@ jobs:
           
           curl -X POST "$CALLBACK_URL" \
             -H "Content-Type: application/json" \
+            -H "x-webhook-token: ${{ secrets.WEBHOOK_TOKEN }}" \
             -d "$PAYLOAD" \
             --max-time 10 \
             --retry 3 \
