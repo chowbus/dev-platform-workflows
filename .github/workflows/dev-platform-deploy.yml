@@ -62,9 +62,5 @@ jobs:
       node_version: '18'
       build_command: 'build_${{ inputs.environment }}'
       build_output_dir: 'build'
-    secrets:
-      AWS_ACCESS_KEY_ID_STAGING_CI: ${{ secrets.AWS_ACCESS_KEY_ID_STAGING_CI }}
-      AWS_SECRET_ACCESS_KEY_STAGING_CI: ${{ secrets.AWS_SECRET_ACCESS_KEY_STAGING_CI }}
-      AWS_ACCESS_KEY_ID_PRODUCTION_CI: ${{ secrets.AWS_ACCESS_KEY_ID_PRODUCTION_CI }}
-      AWS_SECRET_ACCESS_KEY_PRODUCTION_CI: ${{ secrets.AWS_SECRET_ACCESS_KEY_PRODUCTION_CI }}
-      AWS_REGION: ${{ secrets.AWS_REGION }}
+    # 继承组织/仓库级别的 secrets（AWS credentials 等）
+    secrets: inherit

@@ -71,6 +71,31 @@ on:
         required: false
         type: string
         default: "dist"
+    secrets:
+      AWS_ACCESS_KEY_ID_STAGING_CI:
+        description: 'AWS Access Key ID for Staging'
+        required: false
+      AWS_SECRET_ACCESS_KEY_STAGING_CI:
+        description: 'AWS Secret Access Key for Staging'
+        required: false
+      AWS_ACCESS_KEY_ID_PRODUCTION_CI:
+        description: 'AWS Access Key ID for Production'
+        required: false
+      AWS_SECRET_ACCESS_KEY_PRODUCTION_CI:
+        description: 'AWS Secret Access Key for Production'
+        required: false
+      AWS_ACCESS_KEY_ID_PROD_CI:
+        description: 'AWS Access Key ID for Production (alias)'
+        required: false
+      AWS_SECRET_ACCESS_KEY_PROD_CI:
+        description: 'AWS Secret Access Key for Production (alias)'
+        required: false
+      AWS_REGION:
+        description: 'AWS Region'
+        required: false
+      OAUTH_GITHUB_TOKEN:
+        description: 'GitHub OAuth Token'
+        required: false
 
 env:
   GITHUB_TOKEN: ${{ secrets.OAUTH_GITHUB_TOKEN }}
