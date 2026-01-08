@@ -61,6 +61,16 @@ on:
         required: false
         type: string
         default: ""
+      build_command:
+        description: 'NPM build command name (e.g., build, build_staging)'
+        required: false
+        type: string
+        default: "build"
+      build_output_dir:
+        description: 'Build output directory'
+        required: false
+        type: string
+        default: "dist"
 
 env:
   GITHUB_TOKEN: ${{ secrets.OAUTH_GITHUB_TOKEN }}
@@ -116,7 +126,7 @@ jobs:
       - name: 🏗️ Build Application
         run: |
           export NODE_OPTIONS=--openssl-legacy-provider
-          npm run build_${{ inputs.environment }}
+          npm run ${{ inputs.build_command }}
         env:
           CI: true
 
@@ -127,17 +137,17 @@ jobs:
 
       - name: 📊 Verify Build Output
         run: |
-          if [ ! -d "build" ]; then
-            echo "❌ Build output directory 'build' not found"
+          if [ ! -d "${{ inputs.build_output_dir }}" ]; then
+            echo "❌ Build output directory '${{ inputs.build_output_dir }}' not found"
             exit 1
           fi
           
           echo "✅ Build output directory exists"
           echo "📁 Build output contents:"
-          ls -lah build/ || true
+          ls -lah ${{ inputs.build_output_dir }}/ || true
           
           # Calculate build size
-          BUILD_SIZE=$(du -sh build | cut -f1)
+          BUILD_SIZE=$(du -sh ${{ inputs.build_output_dir }} | cut -f1)
           echo "📦 Build size: $BUILD_SIZE"
 
       - name: 🔑 Configure AWS Credentials (Staging)
@@ -173,7 +183,7 @@ jobs:
           echo "📤 Deploying to: $S3_PATH"
           
           # Sync to S3
-          aws s3 sync build/ "$S3_PATH" --delete
+          aws s3 sync ${{ inputs.build_output_dir }}/ "$S3_PATH" --delete
           
           echo "✅ S3 deployment completed"
 
