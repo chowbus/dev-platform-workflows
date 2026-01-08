@@ -76,6 +76,11 @@ on:
         required: false
         type: string
         default: "auto"
+      aws_region:
+        description: 'AWS Region'
+        required: false
+        type: string
+        default: "us-east-1"
     secrets:
       AWS_ACCESS_KEY_ID_STAGING_CI:
         description: 'AWS Access Key ID for Staging'
@@ -234,7 +239,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_STAGING_CI }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_STAGING_CI }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ inputs.aws_region || secrets.AWS_REGION || 'us-east-1' }}
 
       - name: 🔑 Configure AWS Credentials (Production)
         if: inputs.environment == 'production'
@@ -242,7 +247,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_PROD_CI }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD_CI }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ inputs.aws_region || secrets.AWS_REGION || 'us-east-1' }}
 
       - name: 📤 Deploy to S3
         run: |
