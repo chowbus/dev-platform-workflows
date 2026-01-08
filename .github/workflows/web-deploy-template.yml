@@ -382,17 +382,19 @@ jobs:
           
           PAYLOAD=$(cat <<EOF
           {
+            "event": "deploy",
             "status": "success",
             "environment": "${{ inputs.environment }}",
-            "deploymentId": "${{ github.run_id }}",
-            "deploymentUrl": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-            "deployedUrl": "$DEPLOY_URL",
-            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "commit": "${{ github.sha }}",
-            "branch": "${{ github.ref_name }}",
+            "imageTag": "${{ inputs.version }}",
+            "gitRef": "${{ inputs.git_ref }}",
             "iterationId": "${{ inputs.iteration_id }}",
-            "iterationName": "${{ inputs.iteration_name }}",
-            "version": "${{ inputs.version }}"
+            "commitHash": "${{ github.sha }}",
+            "commitMessage": "$(git log -1 --pretty=%B | head -n 1 | sed 's/\"/\\\\"/g')",
+            "commitAuthor": "${{ github.actor }}",
+            "githubRunId": "${{ github.run_id }}",
+            "githubRunUrl": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "deployUrl": "$DEPLOY_URL",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           }
           EOF
           )
@@ -414,17 +416,18 @@ jobs:
           
           PAYLOAD=$(cat <<EOF
           {
-            "status": "failure",
+            "event": "deploy",
+            "status": "failed",
             "environment": "${{ inputs.environment }}",
-            "deploymentId": "${{ github.run_id }}",
-            "deploymentUrl": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "commit": "${{ github.sha }}",
-            "branch": "${{ github.ref_name }}",
-            "error": "Deployment failed, check GitHub Actions logs for details",
+            "imageTag": "${{ inputs.version }}",
+            "gitRef": "${{ inputs.git_ref }}",
             "iterationId": "${{ inputs.iteration_id }}",
-            "iterationName": "${{ inputs.iteration_name }}",
-            "version": "${{ inputs.version }}"
+            "commitHash": "${{ github.sha }}",
+            "commitAuthor": "${{ github.actor }}",
+            "githubRunId": "${{ github.run_id }}",
+            "githubRunUrl": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "message": "Deployment failed, check GitHub Actions logs for details",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           }
           EOF
           )
@@ -446,17 +449,18 @@ jobs:
           
           PAYLOAD=$(cat <<EOF
           {
+            "event": "deploy",
             "status": "cancelled",
             "environment": "${{ inputs.environment }}",
-            "deploymentId": "${{ github.run_id }}",
-            "deploymentUrl": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "commit": "${{ github.sha }}",
-            "branch": "${{ github.ref_name }}",
-            "error": "Deployment was cancelled",
+            "imageTag": "${{ inputs.version }}",
+            "gitRef": "${{ inputs.git_ref }}",
             "iterationId": "${{ inputs.iteration_id }}",
-            "iterationName": "${{ inputs.iteration_name }}",
-            "version": "${{ inputs.version }}"
+            "commitHash": "${{ github.sha }}",
+            "commitAuthor": "${{ github.actor }}",
+            "githubRunId": "${{ github.run_id }}",
+            "githubRunUrl": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "message": "Deployment was cancelled",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           }
           EOF
           )
