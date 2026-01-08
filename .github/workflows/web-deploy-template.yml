@@ -401,7 +401,7 @@ jobs:
           
           curl -X POST "$CALLBACK_URL" \
             -H "Content-Type: application/json" \
-            -H "x-webhook-token: ${{ secrets.WEBHOOK_TOKEN }}" \
+            -H "x-webhook-token: 088f3888a1d58af1eb00e9511efb4aa6991cd310d3916237fc70e5af21e57ad7" \
             -d "$PAYLOAD" \
             --max-time 10 \
             --retry 3 \
@@ -433,7 +433,7 @@ jobs:
           
           curl -X POST "$CALLBACK_URL" \
             -H "Content-Type: application/json" \
-            -H "x-webhook-token: ${{ secrets.WEBHOOK_TOKEN }}" \
+            -H "x-webhook-token: 088f3888a1d58af1eb00e9511efb4aa6991cd310d3916237fc70e5af21e57ad7" \
             -d "$PAYLOAD" \
             --max-time 10 \
             --retry 3 \
@@ -465,7 +465,7 @@ jobs:
           
           curl -X POST "$CALLBACK_URL" \
             -H "Content-Type: application/json" \
-            -H "x-webhook-token: ${{ secrets.WEBHOOK_TOKEN }}" \
+            -H "x-webhook-token: 088f3888a1d58af1eb00e9511efb4aa6991cd310d3916237fc70e5af21e57ad7" \
             -d "$PAYLOAD" \
             --max-time 10 \
             --retry 3 \
