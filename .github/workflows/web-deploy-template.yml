@@ -308,7 +308,38 @@ jobs:
             --retry 3 \
             || echo "⚠️  Callback failed"
 
-      - name: 📊 Deployment Summary
+      - name: � Send Deployment Callback (Cancelled)
+        if: cancelled() && inputs.callback_url != ''
+        run: |
+          CALLBACK_URL="${{ inputs.callback_url }}"
+          
+          PAYLOAD=$(cat <<EOF
+          {
+            "status": "cancelled",
+            "environment": "${{ inputs.environment }}",
+            "deploymentId": "${{ github.run_id }}",
+            "deploymentUrl": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "commit": "${{ github.sha }}",
+            "branch": "${{ github.ref_name }}",
+            "error": "Deployment was cancelled",
+            "iterationId": "${{ inputs.iteration_id }}",
+            "iterationName": "${{ inputs.iteration_name }}",
+            "version": "${{ inputs.version }}"
+          }
+          EOF
+          )
+          
+          echo "📞 Sending cancellation callback to: $CALLBACK_URL"
+          
+          curl -X POST "$CALLBACK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            --max-time 10 \
+            --retry 3 \
+            || echo "⚠️  Callback failed"
+
+      - name: �📊 Deployment Summary
         if: always()
         run: |
           echo "## 📊 Deployment Summary" >> $GITHUB_STEP_SUMMARY
